@@ -1,0 +1,4 @@
+<wt>
+    <resources location="/resources" />
+    <approot location="/" />
+</wt>

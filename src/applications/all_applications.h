@@ -1,0 +1,3 @@
+namespace NApplication {
+    class TTelegramAuthorization;
+}
