@@ -10,7 +10,7 @@ namespace NApplication {
         void processAuthData(const std::string* authData);
 
     private:
-        const std::string BotToken;
+        static const std::string BotToken;
 
         Wt::Dbo::Session UserDbSession;
         Wt::Dbo::backend::Sqlite3 UserDb;

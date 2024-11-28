@@ -19,8 +19,9 @@
 
 
 namespace {
-    static constexpr const char* USER_ID_COOKIE_KEY = "tg_user_id";
-    static constexpr const char* HASH_COOKIE_KEY = "tg_hash";
+    constexpr const char* USER_ID_COOKIE_KEY = "tg_user_id";
+    constexpr const char* HASH_COOKIE_KEY = "tg_hash";
+    constexpr const char* BOT_TOKEN = "XXXXXXXXXX:YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY";
     
     const std::string telegramWidgetCode = R"js(
         (function() {
@@ -49,7 +50,7 @@ namespace {
     std::vector<unsigned char> computeSHA256(const std::string& input) {
         unsigned char hash[SHA256_DIGEST_LENGTH];
         SHA256(reinterpret_cast<const unsigned char*>(input.c_str()), input.size(), hash);
-        return std::vector<unsigned char>(hash, hash + SHA256_DIGEST_LENGTH);
+        return {hash, hash + SHA256_DIGEST_LENGTH};
     }
 
     std::vector<unsigned char> computeHMACSHA256(const std::vector<unsigned char>& key, const std::string& data) {
@@ -60,13 +61,13 @@ namespace {
              reinterpret_cast<const unsigned char*>(data.c_str()), data.size(),
              result, &resultLen);
 
-        return std::vector<unsigned char>(result, result + resultLen);
+        return {result, result + resultLen};
     }
 
 
     std::string toHexString(const std::vector<unsigned char>& data) {
         std::stringstream ss;
-        for (unsigned char byte : data) {
+        for (const auto byte : data) {
             ss << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(byte);
         }
         return ss.str();
@@ -90,7 +91,10 @@ namespace {
 
         std::string preparedData;
         for (const auto& [key, value] : sortedData) {
-            preparedData += key + "=" + value + "\n";
+            preparedData += key;
+            preparedData.push_back('=');
+            preparedData += value;
+            preparedData.push_back('\n');
         }
 
         if (preparedData.empty()) {
@@ -102,9 +106,9 @@ namespace {
         const std::string computedHash = toHexString(hmac);
 
         Wt::log("validateAuthorization")
-            << "prepared data: " << preparedData
-            << "\ncomputed hash: " << computedHash
-            << "\nreceived hash: " << receivedHash;
+            << "\nPrepared data: " << preparedData
+            << "\nComputed hash: " << computedHash
+            << "\nReceived hash: " << receivedHash;
 
         return computedHash == receivedHash;
     }
@@ -113,7 +117,6 @@ namespace {
 namespace NApplication {
     TTelegramAuthorization::TTelegramAuthorization(const Wt::WEnvironment &env)
         : Wt::WApplication(env)
-        , BotToken("7006088383:AAEFRLfGNvTy4YsU4_MlD9AppPkb6hpVeR0")
         , UserDbSession()
         , UserDb(NDataBase::USER_DB_PATH)
     {
@@ -154,7 +157,7 @@ namespace NApplication {
         if (cookie.find(USER_ID_COOKIE_KEY) == cookie.end()) {
             Wt::log("TTelegramAuthorization::processAuthData:") << "auth_data was not found in cookies";
 
-            const auto botTokenHash{computeSHA256(BotToken)};
+            const auto botTokenHash{computeSHA256(BOT_TOKEN)};
             const auto json = nlohmann::json::parse(*authData);
 
             if (!validateAuthorization(json, botTokenHash)) {
@@ -169,7 +172,7 @@ namespace NApplication {
             );
 
             Wt::WApplication::instance()->setCookie(
-                    {"HASH_COOKIE_KEY", json["hash"], std::chrono::duration<long long>(20 * 24 * 60 * 60)}
+                    {HASH_COOKIE_KEY, json["hash"], std::chrono::duration<long long>(20 * 24 * 60 * 60)}
             );
 
             Wt::Dbo::Transaction transaction(UserDbSession);
@@ -199,7 +202,7 @@ namespace NApplication {
                         .bind(std::stoi(it->second));
 
                 std::string message;
-                if (rowIt->getHash() == cookie.find("HASH_COOKIE_KEY")->second) {
+                if (rowIt->getHash() == cookie.find(HASH_COOKIE_KEY)->second) {
                     message = "Nice! You logged in!";
                 } else {
                     message = "Hmm.. Haven't u changed cookies..?";
@@ -208,7 +211,7 @@ namespace NApplication {
                 transaction.commit();
 
                 root()->addWidget(
-                    std::make_unique<Wt::WText>(message)
+                    std::make_unique<Wt::WText>(std::move(message))
                 );
             } else {
                 root()->addWidget(
